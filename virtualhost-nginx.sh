@@ -65,48 +65,47 @@ if [ "$action" == 'create' ]
 
 		### create virtual host rules file
 		if ! echo "server {
-			listen   80;
-			root $rootDir;
-			index index.php index.html index.htm;
-			server_name $domain;
+    listen   80;
+    root $rootDir;
+    server_name $domain;
 
-			# serve static files directly
-			location ~* \.(jpg|jpeg|gif|css|png|js|ico|html)$ {
-				access_log off;
-				expires max;
-			}
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-XSS-Protection "1; mode=block";
+    add_header X-Content-Type-Options "nosniff";
 
-			# removes trailing slashes (prevents SEO duplicate content issues)
-			if (!-d \$request_filename) {
-				rewrite ^/(.+)/\$ /\$1 permanent;
-			}
+    index index.html index.htm index.php;
 
-			# unless the request is for a valid file (image, js, css, etc.), send to bootstrap
-			if (!-e \$request_filename) {
-				rewrite ^/(.*)\$ /index.php?/\$1 last;
-				break;
-			}
+    charset utf-8;
 
-			# removes trailing 'index' from all controllers
-			if (\$request_uri ~* index/?\$) {
-				rewrite ^/(.*)/index/?\$ /\$1 permanent;
-			}
+    location ~* \.(jpg|jpeg|gif|css|png|js|ico|html|eof|woff|ttf)$ {
+        if (-f $request_filename) {
+            access_log off;
+            expires max;
+        }
+    }
 
-			# catch all
-			error_page 404 /index.php;
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
 
-			location ~ \.php$ {
-				fastcgi_split_path_info ^(.+\.php)(/.+)\$;
-				fastcgi_pass 127.0.0.1:9000;
-				fastcgi_index index.php;
-				include fastcgi_params;
-			}
+    error_page 404 /index.php;
 
-			location ~ /\.ht {
-				deny all;
-			}
+    location ~ \.php$ {
+        fastcgi_pass unix:/run/php/php7.2-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
 
-		}" > $sitesAvailable$domain
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+
+    # removes trailing slashes (prevents SEO duplicate content issues)
+    if (!-d \$request_filename) {
+        rewrite ^/(.+)/\$ /\$1 permanent;
+    }
+
+}" > $sitesAvailable$domain
 		then
 			echo -e $"There is an ERROR create $domain file"
 			exit;
