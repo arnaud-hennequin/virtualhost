@@ -5,7 +5,7 @@ TEXTDOMAIN=virtualhost
 ### Set default parameters
 action=$1
 domain=$2
-rootDir=$3
+baseDir=$3
 owner=$(who am i | awk '{print $1}')
 sitesEnable='/etc/nginx/sites-enabled/'
 sitesAvailable='/etc/nginx/sites-available/'
@@ -28,16 +28,16 @@ do
 	read domain
 done
 
-if [ "$rootDir" == "" ]; then
-	rootDir=${domain//./}
+if [ "$baseDir" == "" ]; then
+	baseDir=${domain//./}
 fi
 
 ### if root dir starts with '/', don't use /var/www as default starting point
-if [[ "$rootDir" =~ ^/ ]]; then
+if [[ "$baseDir" =~ ^/ ]]; then
 	userDir=''
 fi
 
-rootDir=$userDir$rootDir
+rootDir=$userDir$baseDir
 
 if [ "$action" == 'create' ]
 	then
@@ -64,48 +64,44 @@ if [ "$action" == 'create' ]
 		fi
 
 		### create virtual host rules file
-		if ! echo "server {
-    listen   80;
-    root $rootDir;
-    server_name $domain;
-
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-XSS-Protection "1; mode=block";
-    add_header X-Content-Type-Options "nosniff";
-
-    index index.html index.htm index.php;
-
-    charset utf-8;
-
-    location ~* \.(jpg|jpeg|gif|css|png|js|ico|html|eof|woff|ttf)$ {
-        if (-f $request_filename) {
-            access_log off;
-            expires max;
-        }
-    }
-
-    location = /favicon.ico { access_log off; log_not_found off; }
-    location = /robots.txt  { access_log off; log_not_found off; }
-
-    error_page 404 /index.php;
-
-    location ~ \.php$ {
-        fastcgi_pass unix:/run/php/php7.2-fpm.sock;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-        include fastcgi_params;
-    }
-
-    location ~ /\.(?!well-known).* {
-        deny all;
-    }
-
-    # removes trailing slashes (prevents SEO duplicate content issues)
-    if (!-d \$request_filename) {
-        rewrite ^/(.+)/\$ /\$1 permanent;
-    }
-
-}" > $sitesAvailable$domain
+		if ! {
+			echo 'server {'
+			echo '    listen   80;'
+			echo "    root $rootDir;"
+			echo "    server_name $domain;"
+			echo ''
+			echo '    fastcgi_buffers 16 16k;'
+			echo '    fastcgi_buffer_size 32k;'
+			echo ''
+			echo '    charset utf-8;'
+			echo ''
+			echo '    location ~* \.(jpg|jpeg|gif|css|png|js|ico|html|eof|woff|ttf)$ {'
+			echo '        if (-f $request_filename) {'
+			echo '            access_log off;'
+			echo '            expires 30d;'
+			echo '        }'
+			echo '    }'
+			echo ''
+			echo '    location ~ \.php$ {'
+			echo '        fastcgi_pass unix:/run/php/php7.4-fpm.sock;'
+			echo '        fastcgi_index index.php;'
+			echo '        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;'
+			echo '        include fastcgi_params;'
+			echo '    }'
+			echo ''
+			echo '    location ~ /\.(?!well-known).* {'
+			echo '        deny all;'
+			echo '    }'
+			echo ''
+			echo '    # removes trailing slashes (prevents SEO duplicate content issues)'
+			echo '    if (!-d \$request_filename) {'
+			echo '        rewrite ^/(.+)/\$ /\$1 permanent;'
+			echo '    }'
+			echo ''
+			echo "    error_log /var/log/nginx/${baseDir}_error.log;"
+			echo "    access_log /var/log/nginx/${baseDir}_access.log;"
+			echo '}'
+		} > $sitesAvailable$domain
 		then
 			echo -e $"There is an ERROR create $domain file"
 			exit;
@@ -122,7 +118,7 @@ if [ "$action" == 'create' ]
 				echo -e $"Host added to /etc/hosts file \n"
 		fi
 
-        ### Add domain in /mnt/c/Windows/System32/drivers/etc/hosts (Windows Subsytem for Linux)
+		### Add domain in /mnt/c/Windows/System32/drivers/etc/hosts (Windows Subsytem for Linux)
 		if [ -e /mnt/c/Windows/System32/drivers/etc/hosts ]
 		then
 			if ! echo -e "\r127.0.0.1       $domain" >> /mnt/c/Windows/System32/drivers/etc/hosts
